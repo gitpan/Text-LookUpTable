@@ -3,7 +3,7 @@ use strict;
 use warnings;
 
 use Test::More;
-plan tests => 37;
+plan tests => 46;
 
 use_ok('Text::LookUpTable');
 
@@ -32,10 +32,6 @@ ok($lut->get_x_vals(3));
 
 ok($lut->get_x_coords());
 ok($lut->get_y_coords());
-
-#print $str_tbl;
-#ok($lut->load_file('/tmp/lut-test-DELETE_ME.tbl'));
-
 
 # Load the string version of a table and check that
 # it is equivalent.
@@ -98,15 +94,20 @@ ok($ys[3] == 2);
 # Try saving a table to a file and make sure it is equivalent
 # after it is re-loaded.
 
-my $tmp_file = '/tmp/lut-test-DELETE_ME.tbl';
+# This test caused a failure on CPAN Testers
+# [http://www.cpantesters.org/cpan/report/07648452-b19f-3f77-b713-d32bba55d77f]
+# with a permission denied error due to the file created.
+# TODO - How can this test be performed?
 
-my $res = $lut->save_file($tmp_file);
-ok($res);
-
-my $tbl3 = Text::LookUpTable->load_file($tmp_file);
-ok($tbl3);
-
-ok("$tbl2" eq "$tbl3");
+#my $tmp_file = '/tmp/lut-test-DELETE_ME.tbl';
+#
+#my $res = $lut->save_file($tmp_file);
+#ok($res);
+#
+#my $tbl3 = Text::LookUpTable->load_file($tmp_file);
+#ok($tbl3);
+#
+#ok("$tbl2" eq "$tbl3");
 # }}}
 
 # Try to load some faulty tables and make sure the error is caught.
@@ -286,3 +287,116 @@ ok("$tblA" eq "$tblB");
 }
 # }}}
 
+# {{{ load_blank
+
+{
+my $str_tblA = 
+"
+               x
+
+            [0]  [0]
+       [0]   0       0
+ y     [0]   0       0
+       [0]   0       0
+       [0]   0       0
+
+";
+
+my $tblA = Text::LookUpTable->load($str_tblA);
+ok($tblA);
+
+my $tblB = Text::LookUpTable->load_blank(2, 4, "x", "y");
+ok($tblB);
+
+#print STDERR $tblA;
+#print STDERR $tblB;
+
+ok("$tblA" eq "$tblB");
+
+}
+# }}}
+
+# {{{ set_*_coords
+
+{
+my $str_tblA = 
+"
+               x
+
+            [5]  [6]
+       [1]   0       0
+ y     [2]   0       0
+       [3]   0       0
+       [4]   0       0
+
+";
+
+my $tblA = Text::LookUpTable->load($str_tblA);
+ok($tblA);
+
+my $tblB = Text::LookUpTable->load_blank(2, 4, "x", "y");
+ok($tblB);
+
+$tblB->set_y_coords(1, 2, 3, 4);
+
+$tblB->set_x_coords(5, 6);
+
+# debug
+#print STDERR $tblA;
+#print STDERR $tblB;
+
+ok("$tblA" eq "$tblB");
+
+}
+# }}}
+
+# {{{ diff_*_coords
+
+{
+
+# These tables have the same values but different coordinates.
+
+my $str_tblA = 
+"
+                     rpm
+
+               [1.25]  [3.35]  [4.97]
+       [100]   1       2       3
+ map   [200]   4       5       6
+       [300]   7       8       9
+       [800]   10      11      12
+
+";
+
+my $str_tblB = 
+"
+                     rpm
+
+               [2.25]  [3.35]  [4.97]
+       [100]   1       2       3
+ map   [200]   4       5       6
+       [666]   7       8       9
+       [800]   10      11      666
+
+";
+
+my $tblA = Text::LookUpTable->load($str_tblA);
+ok($tblA);
+
+my $tblB = Text::LookUpTable->load($str_tblB);
+ok($tblB);
+
+{
+my @diff = $tblA->diff_x_coords($tblB);
+ok(1 == @diff);
+ok($diff[0] == 0);
+}
+
+{
+my @diff = $tblA->diff_y_coords($tblB);
+ok(1 == @diff);
+ok($diff[0] == 2);
+}
+
+}
+# }}}

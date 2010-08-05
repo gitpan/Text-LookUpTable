@@ -6,7 +6,7 @@ use Carp;
 
 use vars qw($VERSION);
 
-$VERSION = 0.03;
+$VERSION = 0.05;
 use 5.6.1;
 
 use overload q("") => \&as_string;
@@ -22,6 +22,7 @@ Text::LookUpTable - Perl5 module for text based look up table operations
 
   $tbl = Text::LookUpTable->load_file('my_table.tbl');
   $tbl = Text::LookUpTable->load($str_tbl);
+  $tbl = Text::LookUpTable->load_blank($x_size, $y_size, $x_title, $y_title);
 
   print $tbl;
   $str_tbl = "$tbl";
@@ -34,8 +35,14 @@ Text::LookUpTable - Perl5 module for text based look up table operations
   @diff_coords = $tbl->diff($tbl2);
   $diffp = $tbl->diff($tbl2, 1);  # true/false no coordinates
 
+  @xdiffs = $tb1->diff_x_coords($tb2);
+  @ydiffs = $tb1->diff_y_coords($tb2);
+
   @x_coords = $tbl->get_x_coords();
   @y_coords = $tbl->get_y_coords();
+
+  $res = $tbl->set_x_coords(@x_coords);
+  $res = $tbl->set_y_coords(@y_coords);
 
   @ys = $tbl->get_y_vals($x_offset);
   @xs = $tbl->get_x_vals($y_offset);
@@ -91,7 +98,6 @@ The y values start at offset 0 at the bottom and increase upward.
 
 =head1 OPERATIONS
 
-
 =cut
 
 #
@@ -137,7 +143,7 @@ sub load {
 	#
 	# The x coordinates should have num_x values in square brackets []
 	#
-	# A regular row should have num_x values + 1 coordiant in square brackets.
+	# A regular row should have num_x values + 1 coordinates in square brackets.
 	#
 	# The row with the y title should have num_x values + 2
 	#
@@ -186,7 +192,7 @@ sub load {
 			next;
 		}
 
-		# x coordiantes line across top with values in square brackets
+		# x coordinates line across top with values in square brackets
 		if (! defined $num_x_coords) {
 			$num_x_coords = $num_parts;
 
@@ -267,7 +273,7 @@ sub load_file {
 	my $file = shift;
 
 	unless (-e $file) {
-		croak "ERROR: File '$file' does not exist.";
+		carp "ERROR: File '$file' does not exist.";
 		return;
 	}
 
@@ -278,6 +284,69 @@ sub load_file {
 	$new_tbl->{file} = $file;
 
 	return $new_tbl;
+}
+# }}}
+
+# {{{ load_blank
+
+=head2 Text::LookUpTable->load_blank($x_size, $y_size, $x_title, $y_title)
+
+  Returns: new object on success, FALSE on error
+
+Creates a blank object with all values initialized to zero and
+dimensions of $x_size and $y_size.
+
+=cut
+
+sub load_blank {
+	my $class = shift;
+	my $x_size = shift;
+	my $y_size = shift;
+	my $x_title = shift;
+	my $y_title = shift;
+
+	unless (defined $x_size and $x_size > 0) {
+		carp "ERROR: x_size must be a value > 0, '$x_size' invalid.";
+		return;
+	}
+
+	unless (defined $y_size and $y_size > 0) {
+		carp "ERROR: y_size must be a value > 0, '$y_size' invalid.";
+		return;
+	}
+
+	unless (defined $x_title and $x_title ne '') {
+		carp "ERROR: x_title must be a non-empty string, '$x_title'.";
+		return;
+	}
+
+	unless (defined $y_title and $y_title ne '') {
+		carp "ERROR: y_title must be a non-empty string, '$y_title'.";
+		return;
+	}
+
+    my @xs;
+    for (my $i = 0; $i < $x_size; $i++) {
+        $xs[$i] = 0;
+    }
+
+    my @ys;
+    for (my $i = 0; $i < $y_size; $i++) {
+        $ys[$i] = 0;
+    }
+
+    my @vals;
+    for (my $i = 0; $i < $y_size; $i++) {
+        push @vals, [@xs];
+    }
+
+    bless {
+        x_title => $x_title,
+        y_title => $y_title,
+        x => \@xs,
+        y => \@ys,
+        vals => \@vals,
+    }, $class;
 }
 # }}}
 
@@ -305,7 +374,7 @@ The long hand form $tbl->as_string(); should not normally be needed.
 #
 #               rpm
 #
-#             [12]   [15]  [17]  [35]   (x coordiantes title)
+#             [12]   [15]  [17]  [35]   (x coordinates title)
 #      [100]  3      15    4     2
 # map  [120]  10     12    3     4
 #      [130]  15.2   12    13    20
@@ -337,7 +406,7 @@ sub as_string {
 	}
 	@yt_column = align('left', @yt_column);
 
-	# y coordiantes column
+	# y coordinates column
 	my @y_column;
 	$y_column[0] = " ";
 	for (my $i = 1; $i < $num_rows; $i++) {
@@ -370,7 +439,7 @@ sub as_string {
 	}
 
 
-	# The x title is treated seperately without using align().
+	# The x title is treated separately without using align().
 	# All the rest is formatted with align().
 	my $x_title = $self->{x_title};
 	my $len = length $lines[0];
@@ -411,7 +480,7 @@ sub save_file {
 	my $file = shift;
 
 	if (! defined $file or $file =~ /^[\s]+$/) {
-		croak "ERROR: trying to save but no file specified and no file stored.";
+		carp "ERROR: trying to save but no file specified and no file stored.";
 		return;
 	}
 
@@ -419,7 +488,7 @@ sub save_file {
 
 	my $res = open FILE, "> $file";
 	if (! $res) {
-		croak "ERROR: unable to open file '$file': $!";
+		carp "ERROR: unable to open file '$file': $!";
 		return;
 	}
 
@@ -432,13 +501,20 @@ sub save_file {
 
 # }}}
 
-# {{{ get_x_coords
+# {{{ get_*_coords
 
-=head2 $tbl->get_x_coords();
+=head2 $tbl->get_*_coords();
 
-  Returns list of all x coordinates on success OR FALSE on error
+  Returns list of all x/y coordinates on success, FALSE on error
 
-Offset 0 starts at the LEFT of the displayed table and increases rightward.
+Offset 0 for the X coordinates start at the LEFT of the displayed table
+and increases RIGHTWARD.
+
+Offset 0 for the Y coordinates start at the TOP of the displayed table
+and increases DOWNWARD.
+
+  @xs = $tbl->get_x_coords();
+  @ys = $tbl->get_y_coords();
 
 =cut
 
@@ -447,17 +523,6 @@ sub get_x_coords {
 
 	@{$self->{x}};
 }
-# }}}
-
-# {{{ get_y_coords
-
-=head2 $tbl->get_y_coords();
-
-  Returns list of all y coordinates on success OR FALSE on error
-
-Offset 0 starts at the top of the display table and increases downward.
-
-=cut
 
 sub get_y_coords {
 	my $self = shift;
@@ -466,17 +531,67 @@ sub get_y_coords {
 }
 # }}}
 
-# {{{ get_y_vals
+# {{{ set_*_coords
 
-=head2 $tbl->get_y_vals($x_offset);
+=head2 $tbl->set_*_coords(@new_coords);
+
+  Returns TRUE on success, FALSE on error
+
+Assigns the x/y coordinates to the values given in the list.
+
+  $res = $tbl->set_x_coords(@new_x_coords);
+  $res = $tbl->set_y_coords(@new_y_coords);
+
+=cut
+
+sub set_x_coords {
+	my $self = shift;
+    my @vals = @_;
+
+    my $num_x_coords = @{$self->{x}};
+    my $num_new_x_coords = @vals;
+
+    if ($num_x_coords != $num_new_x_coords) {
+        carp "ERROR: The number of x coordinates must be the same ($num_x_coords != $num_new_x_coords)";
+        return;
+    }
+
+    $self->{x} = [@vals];
+
+    return 1;
+}
+
+sub set_y_coords {
+	my $self = shift;
+    my @vals = @_;
+
+    my $num_y_coords = @{$self->{y}};
+    my $num_new_y_coords = @vals;
+
+    if ($num_y_coords != $num_new_y_coords) {
+        carp "ERROR: The number of y coordinates must be the same ($num_y_coords != $num_new_y_coords)";
+        return;
+    }
+
+    $self->{y} = [@vals];
+
+    return 1;
+}
+# }}}
+
+# {{{ get_*_vals
+
+=head2 $tbl->get_*_vals($offset);
 
   Returns list of values on success OR FALSE on error
 
-Retrive all y values for a given x offset.
-This operation uses the offset and does not calculate the position using coordinates.
+Retrives all values for a given offset.
+
+ @xs = get_x_vals($y_offset);
+ @ys = get_y_vals($x_offset);
 
 The 0 offset of the returned list will correspond to the 0 offset of the displayed
-table for y which would be at the bottom and increase upward.
+table.
 
 =cut
 
@@ -488,7 +603,7 @@ sub get_y_vals {
 	my $num_y = @{$self->{y}};
 
 	unless ($x < $num_x) {
-		croak "ERROR: there is no y value at position $x\n";
+		carp "ERROR: there is no y value at position $x";
 		return;
 	}
 
@@ -505,22 +620,6 @@ sub get_y_vals {
 	return @res_vals;
 }
 
-# }}}
-
-# {{{ get_x_vals
-
-=head2 $tbl->get_x_vals($y_offset);
-
-  Returns list of values on success OR FALSE on error
-
-Retrive all x values for a given y offset.
-Note, this operation does not use the coordinates, it simply uses the offset.
-
-The 0 offset of the returned list will correspond to the 0 offset of the displayed
-table for x which would be at the left and increase right ward.
-
-=cut
-
 sub get_x_vals {
 	my $self = shift;
 	my $y = shift;
@@ -528,7 +627,7 @@ sub get_x_vals {
 	my $num_x = @{$self->{x}};
 
 	unless ($y < $num_x) {
-		croak "ERROR: y offset $y is out of bounds\n";
+		carp "ERROR: y offset $y is out of bounds";
 		return;
 	}
 
@@ -559,12 +658,12 @@ sub set {
 	my $num_y = @{$self->{y}};
 
 	unless ($y < $num_y) {
-		croak "ERROR: A y offset of $y is beyond the boundary ".($num_y - 1)."";
+		carp "ERROR: A y offset of $y is beyond the boundary ".($num_y - 1)."";
 		return;
 	}
 
 	unless ($x < $num_x) {
-		croak "ERROR: A x offset of $x is beyond the boundary ".($num_x - 1)."";
+		carp "ERROR: A x offset of $x is beyond the boundary ".($num_x - 1)."";
 		return;
 	}
 
@@ -594,12 +693,12 @@ sub get {
 	my $num_y = @{$self->{y}};
 
 	unless ($y < $num_y) {
-		croak "ERROR: A y offset of $y is beyond the boundary ".($num_y - 1)."";
+		carp "ERROR: A y offset of $y is beyond the boundary ".($num_y - 1)."";
 		return;
 	}
 
 	unless ($x < $num_x) {
-		croak "ERROR: A x offset of $x is beyond the boundary ".($num_x - 1)."";
+		carp "ERROR: A x offset of $x is beyond the boundary ".($num_x - 1)."";
 		return;
 	}
 
@@ -625,13 +724,12 @@ sub get {
 
   If $break is FALSE it returns a list of positions that are different.
 
-Test whether the values two tables are different.
-If $brake is FALSE return a complete list of coordinates that are different.
-If $brake is TRUE break out and return as soon it is found that they are
-different (slight performance improvement).
+Determines whether the VALUES two tables are different.
+Does not check if the coordinates or the titles are different.
 
-This only tests the values for differences it does not test the coordinates
-or the titles,
+If $brake is FALSE return a complete list of coordinates that are different.
+If $brake is TRUE it breaks out and returns as soon it is found that they are
+different for a slight performance improvement.
 
 =cut
 
@@ -663,6 +761,61 @@ sub diff {
 		return 0;
 	}
 }
+# }}}
+
+# {{{ diff_*_coords
+
+=head2 $tb1->diff_*_coords($tb2)
+
+  Returns list of differences on success, FALSE on error
+
+ @xdiffs = $tb1->diff_x_coords($tb2);
+ @ydiffs = $tb1->diff_y_coords($tb2);
+
+=cut
+
+sub diff_x_coords {
+	my $tbl1 = shift;
+	my $tbl2 = shift;
+
+    my @coords1 = $tbl1->get_x_coords();
+    my @coords2 = $tbl2->get_x_coords();
+
+    _diff_coords(\@coords1, \@coords2);
+}
+
+sub diff_y_coords {
+	my $tbl1 = shift;
+	my $tbl2 = shift;
+
+    my @cs1 = $tbl1->get_y_coords();
+    my @cs2 = $tbl2->get_y_coords();
+
+    _diff_coords(\@cs1, \@cs2);
+}
+
+sub _diff_coords {
+	my $cs1 = shift;
+	my $cs2 = shift;
+
+    my $num_cs1 = @$cs1;
+    my $num_cs2 = @$cs2;
+
+    if ($num_cs1 != $num_cs2) {
+        carp "ERROR: cant compare tables with different geometries";
+        return;
+    }
+
+    my @diffs;
+	for (my $i = 0; $i < $num_cs1; $i++) {
+        if ($cs1->[$i] != $cs2->[$i]) {
+            push @diffs, $i;
+        }
+	}
+
+	return @diffs;
+}
+
 # }}}
 
 # {{{ as_plot
@@ -768,6 +921,10 @@ sub as_plot {
  The version numbers given have been tested and shown to work
  but other versions may work as well.
 
+=head1 VERSION
+
+This document refers to Text::LookUpTable version 0.05.
+
 =head1 REFERENCES
 
   [1]  MegaSquirt Engine Management System
@@ -784,7 +941,9 @@ sub as_plot {
 
 =head1 AUTHOR
 
-Jeremiah Mahler <jmmahler@gmail.com>
+    Jeremiah Mahler <jmmahler@gmail.com>
+    CPAN ID: JERI
+    http://www.google.com/profiles/jmmahler#about
 
 =head1 COPYRIGHT
 
